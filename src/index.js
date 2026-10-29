@@ -1,9 +1,9 @@
 /**
  * FireX Downloader - Cloudflare Worker
- * v2rayNG (Android) + v2rayN (PC) GitHub Release 代理下载
+ * v2rayNG (Android) + v2rayN (PC) + FlClash GitHub Release 代理下载
  */
 import { Hono } from 'hono';
-import { NG_ARCHS } from './config.js';
+import { NG_ARCHS, NG_EXCLUDE, PRODUCTS, isKnownPattern } from './config.js';
 import { getRelease, findAsset, proxyDownload } from './github.js';
 import { renderPage } from './page.js';
 
@@ -39,37 +39,38 @@ app.post('/api/auth', async (c) => {
   return c.json({ success: false, error: '密码错误' }, 401);
 });
 
-// ─── API: 获取版本信息 ─────────────────────────────────────────
+// ─── 解析请求对应的 asset ─────────────────────────────────────
 
-app.get('/api/info', verifyAuth, async (c) => {
+async function resolveAsset(c) {
   const { product, release, arch, pattern } = c.req.query();
   const env = c.env;
 
+  if (product === 'ng') {
+    const repo = env.V2RAYNG_REPO || '2dust/v2rayNG';
+    const rel = await getRelease(repo, release || 'latest');
+    const archCfg = NG_ARCHS.find((a) => a.value === arch) || NG_ARCHS[0];
+    return { rel, asset: findAsset(rel, archCfg.pattern, NG_EXCLUDE) };
+  }
+
+  const cfg = PRODUCTS[product];
+  if (!cfg) throw new Error('未知产品');
+  if (!pattern || !isKnownPattern(cfg, pattern)) throw new Error('无效的文件类型');
+  const repo = env[cfg.envRepo] || cfg.repo;
+  const rel = await getRelease(repo, release || 'latest');
+  return { rel, asset: findAsset(rel, pattern) };
+}
+
+// ─── API: 获取版本信息 ─────────────────────────────────────────
+
+app.get('/api/info', verifyAuth, async (c) => {
   try {
-    if (product === 'ng') {
-      const repo = env.V2RAYNG_REPO || '2dust/v2rayNG';
-      const rel = await getRelease(repo, release || 'latest');
-      const archCfg = NG_ARCHS.find((a) => a.value === arch) || NG_ARCHS[0];
-      const asset = findAsset(rel, archCfg.pattern);
-
-      return c.json({
-        version: rel.tag,
-        filename: asset.name,
-        size: asset.size,
-        prerelease: rel.prerelease,
-      });
-    } else {
-      const repo = env.V2RAYN_REPO || '2dust/v2rayN';
-      const rel = await getRelease(repo, release || 'latest');
-      const asset = findAsset(rel, pattern);
-
-      return c.json({
-        version: rel.tag,
-        filename: asset.name,
-        size: asset.size,
-        prerelease: rel.prerelease,
-      });
-    }
+    const { rel, asset } = await resolveAsset(c);
+    return c.json({
+      version: rel.tag,
+      filename: asset.name,
+      size: asset.size,
+      prerelease: rel.prerelease,
+    });
   } catch (e) {
     return c.json({ error: e.message }, 400);
   }
@@ -78,23 +79,9 @@ app.get('/api/info', verifyAuth, async (c) => {
 // ─── API: 代理下载 ─────────────────────────────────────────────
 
 app.get('/api/download', verifyAuth, async (c) => {
-  const { product, release, arch, pattern } = c.req.query();
-  const env = c.env;
-
   try {
-    let asset;
-    if (product === 'ng') {
-      const repo = env.V2RAYNG_REPO || '2dust/v2rayNG';
-      const rel = await getRelease(repo, release || 'latest');
-      const archCfg = NG_ARCHS.find((a) => a.value === arch) || NG_ARCHS[0];
-      asset = findAsset(rel, archCfg.pattern);
-    } else {
-      const repo = env.V2RAYN_REPO || '2dust/v2rayN';
-      const rel = await getRelease(repo, release || 'latest');
-      asset = findAsset(rel, pattern);
-    }
-
-    return proxyDownload(asset);
+    const { asset } = await resolveAsset(c);
+    return await proxyDownload(asset);
   } catch (e) {
     return c.json({ error: e.message }, 400);
   }

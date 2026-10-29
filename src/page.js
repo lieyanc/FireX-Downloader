@@ -1,7 +1,7 @@
 /**
  * 前端页面模板
  */
-import { NG_ARCHS, N_PLATFORMS, N_VARIANTS, N_NOTES } from './config.js';
+import { NG_ARCHS, PRODUCTS } from './config.js';
 
 export function renderPage() {
   return `<!DOCTYPE html>
@@ -24,9 +24,9 @@ ${CLIENT_JS}
 
 function clientConfig() {
   return `const NG_ARCHS=${JSON.stringify(NG_ARCHS)};
-const N_PLATFORMS=${JSON.stringify(N_PLATFORMS)};
-const N_VARIANTS=${JSON.stringify(N_VARIANTS)};
-const N_NOTES=${JSON.stringify(N_NOTES)};`;
+const PRODUCTS=${JSON.stringify(
+    Object.fromEntries(Object.entries(PRODUCTS).map(([k, { envRepo, ...rest }]) => [k, rest]))
+  )};`;
 }
 
 // ─── CSS ───────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ body {
 /* ── Tabs ── */
 .tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-bottom: 20px;
 }
@@ -518,6 +518,17 @@ let state = {
   nArch: 'x64',
 };
 
+function cur() { return PRODUCTS[state.product]; }
+
+// 切换产品/平台后修正不可用的平台与架构
+function fixSelection() {
+  const p = cur();
+  if (!p) return;
+  if (!p.variants[state.nPlatform]) state.nPlatform = p.platforms[0].value;
+  const archs = Object.keys(p.variants[state.nPlatform]);
+  if (!archs.includes(state.nArch)) state.nArch = archs[0];
+}
+
 // ── Auth ──
 
 function getToken() {
@@ -609,19 +620,19 @@ function render() {
     return;
   }
   app.innerHTML = renderHeader() + renderTabs() + renderReleaseToggle()
-    + (state.product === 'ng' ? renderNG() : renderN())
+    + (state.product === 'ng' ? renderNG() : renderPC())
     + renderFooter();
   bindEvents();
 }
 
 function renderHeader() {
-  return '<div class="header"><h1>FireX Downloader</h1><p>v2ray 系列 GitHub Release 代理</p></div>';
+  return '<div class="header"><h1>FireX Downloader</h1><p>v2ray / FlClash GitHub Release 代理</p></div>';
 }
 
 function renderTabs() {
   return '<div class="tabs">'
     + tab('ng', 'v2rayNG', 'Android')
-    + tab('n', 'v2rayN', 'Windows / Linux / macOS')
+    + Object.keys(PRODUCTS).map(id => tab(id, PRODUCTS[id].name, PRODUCTS[id].desc)).join('')
     + '</div>';
 }
 
@@ -654,24 +665,18 @@ function renderNG() {
     + '</div></div>';
 }
 
-function renderN() {
-  let pills = N_PLATFORMS.map(p =>
-    '<div class="pill' + (state.nPlatform === p.value ? ' active' : '') + '" data-plat="' + p.value + '">' + p.label + '</div>'
+function renderPC() {
+  const p = cur();
+  let pills = p.platforms.map(pl =>
+    '<div class="pill' + (state.nPlatform === pl.value ? ' active' : '') + '" data-plat="' + pl.value + '">' + pl.label + '</div>'
   ).join('');
 
-  // 架构说明
-  const archLabels = {
-    windows: { x64: 'x64 · Intel / AMD', arm64: 'ARM64 · 高通等' },
-    linux: { x64: 'x64 · Intel / AMD', arm64: 'ARM64 · 树莓派等' },
-    macos: { x64: 'x64 · Intel 芯片', arm64: 'ARM64 · Apple Silicon' },
-  };
-
-  let archs = Object.keys(N_VARIANTS[state.nPlatform]);
+  let archs = Object.keys(p.variants[state.nPlatform]);
   let archPills = archs.map(a =>
-    '<div class="pill' + (state.nArch === a ? ' active' : '') + '" data-narch="' + a + '">' + archLabels[state.nPlatform][a] + '</div>'
+    '<div class="pill' + (state.nArch === a ? ' active' : '') + '" data-narch="' + a + '">' + p.archLabels[state.nPlatform][a] + '</div>'
   ).join('');
 
-  let variants = N_VARIANTS[state.nPlatform][state.nArch] || [];
+  let variants = p.variants[state.nPlatform][state.nArch] || [];
   let list = variants.map(v =>
     '<div class="variant-item">'
     + '<div class="variant-info"><div class="variant-name">' + v.label + '</div>'
@@ -680,7 +685,7 @@ function renderN() {
     + '</div>'
   ).join('');
 
-  let note = N_NOTES[state.nPlatform];
+  let note = p.notes[state.nPlatform];
   let noteHtml = '<div class="notes"><div class="notes-title">Notes</div>'
     + '<div class="notes-req">Requires: <strong>' + note.requirements + '</strong></div>'
     + '<ul>' + note.notes.map(n => '<li>' + n + '</li>').join('') + '</ul></div>';
@@ -695,7 +700,7 @@ function renderN() {
 }
 
 function renderFooter() {
-  const repo = state.product === 'ng' ? '2dust/v2rayNG' : '2dust/v2rayN';
+  const repo = state.product === 'ng' ? '2dust/v2rayNG' : cur().repo;
   return '<div class="footer"><a href="https://github.com/' + repo + '" target="_blank">' + repo + '</a></div>';
 }
 
@@ -703,10 +708,7 @@ function bindEvents() {
   document.querySelectorAll('.tab').forEach(el => {
     el.onclick = () => {
       state.product = el.dataset.tab;
-      if (state.product === 'n') {
-        let archs = Object.keys(N_VARIANTS[state.nPlatform]);
-        if (!archs.includes(state.nArch)) state.nArch = archs[0];
-      }
+      fixSelection();
       render();
     };
   });
@@ -724,8 +726,7 @@ function bindEvents() {
   document.querySelectorAll('#plat-pills .pill').forEach(el => {
     el.onclick = () => {
       state.nPlatform = el.dataset.plat;
-      let archs = Object.keys(N_VARIANTS[state.nPlatform]);
-      if (!archs.includes(state.nArch)) state.nArch = archs[0];
+      fixSelection();
       render();
     };
   });
@@ -768,7 +769,7 @@ async function downloadN(pattern) {
   st.textContent = 'Fetching...';
 
   try {
-    const q = 'product=n&release=' + state.release + '&pattern=' + encodeURIComponent(pattern);
+    const q = 'product=' + state.product + '&release=' + state.release + '&pattern=' + encodeURIComponent(pattern);
     const d = await apiFetch('/api/info?' + q);
     if (d.error) throw new Error(d.error);
     st.textContent = d.version + ' · Downloading...';

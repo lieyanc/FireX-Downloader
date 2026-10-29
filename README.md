@@ -1,6 +1,6 @@
 # FireX Downloader
 
-Cloudflare Worker 代理下载 v2rayNG (Android) 和 v2rayN (Windows/Linux/macOS) 的 GitHub Release 文件。
+Cloudflare Worker 代理下载 v2rayNG (Android)、v2rayN (Windows/Linux/macOS) 和 FlClash (Android/Windows/Linux/macOS) 的 GitHub Release 文件。
 
 ## 功能
 
@@ -8,9 +8,15 @@ Cloudflare Worker 代理下载 v2rayNG (Android) 和 v2rayN (Windows/Linux/macOS
   - 选择架构: arm64-v8a / armeabi-v7a / x86_64 / x86 / universal
 
 - **v2rayN (PC)**
-  - Windows: .NET 依赖版 / 独立版 / Avalonia UI 版
-  - Linux: ZIP 便携版 / DEB 安装包
+  - Windows (x64 / ARM64 / x86): WPF 版 / Avalonia UI 版
+  - Linux (x64 / ARM64 / LoongArch64 / RISC-V 64): ZIP 便携版 / DEB / RPM
   - macOS: ZIP / DMG
+
+- **FlClash**
+  - Android: arm64-v8a / armeabi-v7a / x86_64
+  - Windows: 安装版 / 便携版
+  - Linux: AppImage / DEB / RPM
+  - macOS: DMG
 
 - Latest / Pre-release 版本切换
 - GitHub API 缓存（5 分钟）

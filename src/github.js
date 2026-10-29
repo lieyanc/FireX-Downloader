@@ -141,12 +141,16 @@ export async function getRelease(repo, type) {
   return cachedGetRelease(repo, type || 'latest');
 }
 
-export function findAsset(release, pattern) {
+export function findAsset(release, pattern, exclude) {
   const p = pattern.toLowerCase();
-  const asset = release.assets.find((a) => {
+  const ex = exclude && exclude.toLowerCase();
+  const candidates = release.assets.filter((a) => {
     const name = a.name.toLowerCase();
-    return name === p || name.includes(p);
+    return !name.endsWith('.sig') && !(ex && name.includes(ex));
   });
+  const asset =
+    candidates.find((a) => a.name.toLowerCase() === p) ||
+    candidates.find((a) => a.name.toLowerCase().endsWith(p));
   if (!asset) throw new Error(`未找到匹配的文件: ${pattern}`);
   return {
     name: asset.name,
